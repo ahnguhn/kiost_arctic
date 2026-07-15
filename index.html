@@ -70,9 +70,32 @@
               font-weight: 500; }
   .lbl.region { font-size: 12px; font-weight: 800;
                 text-shadow: 0 0 3px #0b2440, 0 0 4px #0b2440, 0 0 5px #0b2440; }
-  /* ---------- 오른쪽: 설명 ---------- */
-  #desc { overflow-y: auto; border-right: none; border-left: 1px solid #d7dde3; }
-  #desc-body { padding: 12px 14px; }
+  /* 셀값 팝업 */
+  .cell-popup .maplibregl-popup-content { padding: 9px 12px 8px; font-size: 12px;
+      font-family: 'Malgun Gothic', 'Segoe UI', sans-serif; }
+  .cell-popup .pos { color: #667; font-size: 11px; margin-bottom: 5px; }
+  .cell-popup table { border-collapse: collapse; }
+  .cell-popup td { padding: 2px 6px 2px 0; vertical-align: top; }
+  .cell-popup td.k { color: #0f4c81; font-weight: 700; padding-right: 10px; }
+  .cell-popup .nod { color: #99a; }
+  /* ---------- 오른쪽: 설명 + 범례 ---------- */
+  #desc { border-right: none; border-left: 1px solid #d7dde3; }
+  #desc-body { flex: 1; overflow-y: auto; min-height: 0; padding: 12px 14px; }
+  #legend-wrap { border-top: 2px solid #c6ccd4; max-height: 42%; display: flex;
+                 flex-direction: column; min-height: 0; }
+  #legend-body { overflow-y: auto; min-height: 0; padding: 8px 14px 12px; }
+  #legend-empty { color: #99a; text-align: center; padding: 14px 8px; font-size: 12px; }
+  .lg-item { margin-bottom: 12px; }
+  .lg-item.off { opacity: 0.45; }
+  .lg-name { font-size: 12px; font-weight: 700; color: #123; margin-bottom: 4px; }
+  .lg-name .u { font-weight: 400; color: #778; }
+  .lg-bar { width: 100%; height: 13px; border: 1px solid #cfd8e0; border-radius: 3px;
+            display: block; }
+  .lg-ticks { display: flex; justify-content: space-between; font-size: 10.5px;
+              color: #556; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .lg-chips { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  .lg-chip { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #334; }
+  .lg-chip .sw { width: 13px; height: 13px; border: 1px solid #b9c2cc; border-radius: 2px; }
   #desc-body h3 { margin: 0 0 10px; font-size: 15px; color: #123; }
   #desc-body table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
   #desc-body td { padding: 4px 6px; border-bottom: 1px solid #eef1f4;
@@ -111,6 +134,10 @@
   <div class="pane" id="desc">
     <h2>데이터 설명</h2>
     <div id="desc-body"><div id="desc-empty">왼쪽 목록에서 데이터를 선택하세요</div></div>
+    <div id="legend-wrap">
+      <h2>범례 <span style="font-weight:400;color:#889">(그려진 데이터)</span></h2>
+      <div id="legend-body"><div id="legend-empty">그리기를 실행하면 범례가 표시됩니다</div></div>
+    </div>
   </div>
 </div>
 
@@ -175,8 +202,8 @@ for (let lon = -180; lon < 180; lon += 30) {
 /* 파이프라인 다운로드 권역 (utils region_select DEFAULT_REGIONS 와 동일) */
 const REGIONS = [
   { name: 'ARC', label: '북극해', lon_min: -180, lon_max: 180, lat_min: 67, lat_max: 90, color: '#ff5d5d' },
-  { name: 'BRS', label: '베링해', lon_min: 117, lon_max: 198, lat_min: 40, lat_max: 67, color: '#ffb84d' },
-  { name: 'ENS', label: '북유럽해', lon_min: -10, lon_max: 25, lat_min: 49, lat_max: 67, color: '#5ee08a' },
+  { name: 'BRS', label: '베링해', lon_min: 117, lon_max: 198, lat_min: 52, lat_max: 67, color: '#ffb84d' },
+  { name: 'ENS', label: '북유럽해', lon_min: -10, lon_max: 25, lat_min: 49, lat_max: 63, color: '#5ee08a' },
   { name: 'YLS', label: '황해', lon_min: 117.5, lon_max: 127, lat_min: 35, lat_max: 41, color: '#c77dff' },
   { name: 'EAS', label: '동해', lon_min: 127, lon_max: 143, lat_min: 32, lat_max: 50, color: '#4dd7ff' },
 ];
@@ -261,6 +288,7 @@ let CATALOG = [], DESCS = {}, selectedId = null;
 const queue = [];               // 그리기 목록 (id 순서 = 그리기 순서)
 const drawnLayers = [];         // 지도에 올라간 레이어 id
 const hiddenIds = new Set();    // 보이지 않기 상태인 데이터 id
+const drawnData = {};           // id -> {entry, data, w, h, bbox, nod, lo, hi} (셀값 팝업용)
 
 async function boot() {
   const [cat, des] = await Promise.all([
@@ -339,7 +367,9 @@ function removeFromQueue(id) {
   if (map.getSource(lid)) map.removeSource(lid);
   const di = drawnLayers.indexOf(lid);
   if (di >= 0) drawnLayers.splice(di, 1);
+  delete drawnData[id];
   renderQueue();
+  renderLegends();
 }
 
 /* 레이어별 보이기 / 보이지 않기 토글 */
@@ -349,6 +379,7 @@ function toggleVisibility(id) {
   if (map.getLayer(lid))
     map.setLayoutProperty(lid, 'visibility', hiddenIds.has(id) ? 'none' : 'visible');
   renderQueue();
+  renderLegends();
 }
 function renderQueue() {
   const box = document.getElementById('queue');
@@ -541,6 +572,9 @@ async function renderCog(entry) {
     }
   }
   ctx.putImageData(imd, 0, 0);
+  // 클릭 셀값 조회 + 범례용으로 래스터·색상 정보를 보관
+  drawnData[entry.id] = { entry, data, w, h, bbox, nod, lo, hi,
+                          legend: buildLegend(entry, cmap, nColors, etab, lo, hi) };
   return {
     url: cv.toDataURL('image/png'),
     coords: [[flon0, flat1], [flon1, flat1], [flon1, flat0], [flon0, flat0]],
@@ -548,12 +582,170 @@ async function renderCog(entry) {
   };
 }
 
+/* ================================================================
+ * 범례 — 오른쪽 하단, 그려진 레이어의 색상 범례
+ * ================================================================ */
+function buildLegend(entry, cmap, nColors, etab, lo, hi) {
+  const byteColor = (i) => {
+    if (cmap) return [cmap[i] >> 8, cmap[nColors + i] >> 8, cmap[2 * nColors + i] >> 8];
+    if (etab) return [etab.rgb[i * 3], etab.rgb[i * 3 + 1], etab.rgb[i * 3 + 2]];
+    return null;
+  };
+  if (entry.kind === 'float') {
+    const colors = [];
+    for (let k = 0; k < 32; k++) colors.push(lutColor(entry.lut || 'gray', k / 31));
+    return { type: 'gradient', colors, lo, hi, units: entry.units || '' };
+  }
+  if (entry.enc === 'values') {                    // VNP29 이진
+    const labels = { 1: '개수면', 100: '해빙' };
+    const chips = Object.entries(entry.colors || {})
+      .sort((a, b) => (+b[0]) - (+a[0]))
+      .map(([k, c]) => ({ color: c, label: labels[k] || `값 ${k}` }));
+    return { type: 'chips', chips };
+  }
+  if (entry.enc === 'classes') {
+    const chips = [];
+    for (let v = 0; v < CLASS_COLORS.length; v++)
+      chips.push({ color: byteColor(v + 1) || CLASS_COLORS[v], label: `${v}` });
+    return { type: 'chips', chips, title: '클래스' };
+  }
+  if (entry.enc === 'percent') {
+    const colors = [];
+    for (let k = 0; k < 32; k++) {
+      const i = Math.max(1, Math.round(k / 31 * 100));
+      colors.push(byteColor(i) || lutColor(entry.lut || 'ice', i / 100));
+    }
+    return { type: 'gradient', colors, lo: 0, hi: 100, units: '%' };
+  }
+  // linear: byte 1..255 = vmin..vmax
+  const colors = [];
+  for (let k = 0; k < 32; k++) {
+    const i = Math.max(1, Math.round(k / 31 * 255));
+    colors.push(byteColor(i) || lutColor(entry.lut || 'gray', i / 255));
+  }
+  return { type: 'gradient', colors,
+           lo: entry.vmin !== undefined ? entry.vmin : 0,
+           hi: entry.vmax !== undefined ? entry.vmax : 255,
+           units: entry.units || '' };
+}
+
+function renderLegends() {
+  const box = document.getElementById('legend-body');
+  box.innerHTML = '';
+  const ids = drawnLayers.map(l => l.replace(/^cog-/, '')).reverse();  // 위 레이어부터
+  let count = 0;
+  for (const id of ids) {
+    const d = drawnData[id];
+    if (!d || !d.legend) continue;
+    count++;
+    const e = d.entry, lg = d.legend;
+    const it = document.createElement('div');
+    it.className = 'lg-item' + (hiddenIds.has(id) ? ' off' : '');
+    const nm = document.createElement('div');
+    nm.className = 'lg-name';
+    nm.innerHTML = e.name + (lg.units ? ` <span class="u">(${lg.units})</span>` : '') +
+                   (lg.title ? ` <span class="u">(${lg.title})</span>` : '');
+    it.appendChild(nm);
+    if (lg.type === 'gradient') {
+      const cv = document.createElement('canvas');
+      cv.width = 256; cv.height = 13; cv.className = 'lg-bar';
+      const c2 = cv.getContext('2d');
+      for (let x = 0; x < 256; x++) {
+        const t = x / 255 * (lg.colors.length - 1);
+        const i = Math.min(lg.colors.length - 2, Math.floor(t)), f = t - i;
+        const rgb = [0, 1, 2].map(ch =>
+          Math.round(lg.colors[i][ch] * (1 - f) + lg.colors[i + 1][ch] * f));
+        c2.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+        c2.fillRect(x, 0, 1, 13);
+      }
+      it.appendChild(cv);
+      const tk = document.createElement('div');
+      tk.className = 'lg-ticks';
+      const fmt = (v) => (Math.abs(v) >= 100 || Number.isInteger(v)) ? String(Math.round(v)) : v.toFixed(2);
+      const mid = (lg.lo + lg.hi) / 2;
+      tk.innerHTML = `<span>${fmt(lg.lo)}</span><span>${fmt(mid)}</span><span>${fmt(lg.hi)}</span>`;
+      it.appendChild(tk);
+    } else {                                          // chips
+      const row = document.createElement('div');
+      row.className = 'lg-chips';
+      for (const ch of lg.chips) {
+        const chip = document.createElement('div');
+        chip.className = 'lg-chip';
+        chip.innerHTML = `<span class="sw" style="background:rgb(${ch.color[0]},${ch.color[1]},${ch.color[2]})"></span>${ch.label}`;
+        row.appendChild(chip);
+      }
+      it.appendChild(row);
+    }
+    box.appendChild(it);
+  }
+  if (!count)
+    box.innerHTML = '<div id="legend-empty">그리기를 실행하면 범례가 표시됩니다</div>';
+}
+
+/* ================================================================
+ * 셀값 팝업 — 지도 클릭 위치의 각 레이어 셀값 표시
+ * ================================================================ */
+function formatCellValue(d, v) {
+  const e = d.entry;
+  if (e.kind === 'float')
+    return `${v.toFixed(3)}${e.units ? ' ' + e.units : ''}`;
+  if (e.enc === 'values') {                       // VNP29 이진
+    if (v === 100) return '해빙 (100)';
+    if (v === 1) return '개수면 (1)';
+    return `값 ${v}`;
+  }
+  if (e.enc === 'classes') return `클래스 ${v - 1} (byte ${v})`;
+  if (e.enc === 'percent') {
+    if (v > 100) return `플래그 ${v}`;
+    return `${v} %`;
+  }
+  // linear: byte 1..255 -> vmin..vmax
+  if (e.vmin !== undefined && e.vmax !== undefined) {
+    const phys = e.vmin + (v - 1) / 254 * (e.vmax - e.vmin);
+    return `${phys.toFixed(2)}${e.units ? ' ' + e.units : ''} (byte ${v})`;
+  }
+  return `${v}`;
+}
+
+map.on('click', (ev) => {
+  const [xm, ym] = metersFromFake(ev.lngLat.lng, ev.lngLat.lat);
+  const rows = [];
+  for (let i = drawnLayers.length - 1; i >= 0; i--) {      // 위 레이어부터
+    const id = drawnLayers[i].replace(/^cog-/, '');
+    if (hiddenIds.has(id)) continue;
+    const d = drawnData[id];
+    if (!d) continue;
+    const [x0, y0m, x1, y1m] = d.bbox;
+    if (xm < x0 || xm > x1 || ym < y0m || ym > y1m) continue;
+    const sc = Math.floor((xm - x0) / (x1 - x0) * d.w);
+    const sr = Math.floor((y1m - ym) / (y1m - y0m) * d.h);
+    if (sc < 0 || sc >= d.w || sr < 0 || sr >= d.h) continue;
+    const v = d.data[sr * d.w + sc];
+    const isNod = v === undefined || !isFinite(v) ||
+                  (d.nod !== null && v === d.nod) ||
+                  (d.entry.kind === 'palette' && v === 0);
+    rows.push({ nod: isNod,
+      html: `<tr><td class="k">${d.entry.name}</td>` +
+            `<td>${isNod ? '<span class="nod">nodata</span>' : formatCellValue(d, v)}</td></tr>` });
+  }
+  if (!rows.length || rows.every(r => r.nod)) return;   // 전부 nodata 면 팝업 없음
+  const [lon, lat] = inverse(xm, ym);
+  const head = isFinite(lat) && lat > 0
+    ? `<div class="pos">위도 ${lat.toFixed(3)}°, 경도 ${Math.abs(lon).toFixed(3)}°${lon >= 0 ? 'E' : 'W'}</div>`
+    : '';
+  new maplibregl.Popup({ maxWidth: '320px', className: 'cell-popup' })
+    .setLngLat(ev.lngLat)
+    .setHTML(`${head}<table>${rows.map(r => r.html).join('')}</table>`)
+    .addTo(map);
+});
+
 function clearDrawn() {
   for (const id of drawnLayers) {
     if (map.getLayer(id)) map.removeLayer(id);
     if (map.getSource(id)) map.removeSource(id);
   }
   drawnLayers.length = 0;
+  for (const k of Object.keys(drawnData)) delete drawnData[k];
 }
 
 document.getElementById('btn-draw').onclick = async () => {
@@ -584,6 +776,7 @@ document.getElementById('btn-draw').onclick = async () => {
     }
   }
   setStatus('');
+  renderLegends();
   if (union) map.fitBounds(union, { padding: 40, duration: 400 });
 };
 
@@ -592,6 +785,7 @@ document.getElementById('btn-clear').onclick = () => {
   queue.length = 0;      // 그리기 목록도 비움
   hiddenIds.clear();
   renderQueue();
+  renderLegends();
 };
 </script>
 </body>

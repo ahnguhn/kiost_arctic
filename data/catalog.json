@@ -12,7 +12,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "amsr2_l2_SST",
@@ -25,7 +26,8 @@
    "enc": "linear",
    "vmin": -2,
    "vmax": 35,
-   "lut": "thermal"
+   "lut": "thermal",
+   "units": "°C"
   },
   {
    "id": "amsr2_l2_SSW",
@@ -38,7 +40,8 @@
    "enc": "linear",
    "vmin": 0,
    "vmax": 30,
-   "lut": "freeboard"
+   "lut": "freeboard",
+   "units": "m/s"
   },
   {
    "id": "amsr2_l2_research_HSI",
@@ -51,7 +54,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "amsr2_l2_research_ASW",
@@ -64,7 +68,8 @@
    "enc": "linear",
    "vmin": 0,
    "vmax": 60,
-   "lut": "freeboard"
+   "lut": "freeboard",
+   "units": "m/s"
   },
   {
    "id": "amsr2_l2_research_TIT",
@@ -77,7 +82,8 @@
    "enc": "linear",
    "vmin": 0,
    "vmax": 20,
-   "lut": "thermal"
+   "lut": "thermal",
+   "units": "cm"
   },
   {
    "id": "amsr2_l2_research_TSI",
@@ -100,7 +106,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "amsr2_l3_25_SIC",
@@ -113,7 +120,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "amsr2_l3_10_SST",
@@ -126,7 +134,8 @@
    "enc": "linear",
    "vmin": -2,
    "vmax": 35,
-   "lut": "thermal"
+   "lut": "thermal",
+   "units": "°C"
   },
   {
    "id": "amsr2_l3_10_SSW",
@@ -139,7 +148,8 @@
    "enc": "linear",
    "vmin": 0,
    "vmax": 30,
-   "lut": "freeboard"
+   "lut": "freeboard",
+   "units": "m/s"
   },
   {
    "id": "amsr2_l3_research_HSI",
@@ -152,7 +162,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "amsr2_l3_research_ASW",
@@ -165,7 +176,8 @@
    "enc": "linear",
    "vmin": 0,
    "vmax": 60,
-   "lut": "freeboard"
+   "lut": "freeboard",
+   "units": "m/s"
   },
   {
    "id": "amsr2_l3_research_SIM_U",
@@ -178,7 +190,8 @@
    "enc": "linear",
    "vmin": -40,
    "vmax": 40,
-   "lut": "thermal"
+   "lut": "thermal",
+   "units": "cm/s"
   },
   {
    "id": "amsr2_l3_research_SIM_SPD",
@@ -191,7 +204,8 @@
    "enc": "linear",
    "vmin": -40,
    "vmax": 40,
-   "lut": "thermal"
+   "lut": "thermal",
+   "units": "cm/s"
   },
   {
    "id": "amsr2_l3_research_TSI",
@@ -214,7 +228,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "amsr3_l2_HSI",
@@ -227,7 +242,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "amsr3_l2_SST",
@@ -240,7 +256,8 @@
    "enc": "linear",
    "vmin": -2,
    "vmax": 35,
-   "lut": "thermal"
+   "lut": "thermal",
+   "units": "°C"
   },
   {
    "id": "amsr3_l2_SSW",
@@ -253,7 +270,8 @@
    "enc": "linear",
    "vmin": 0,
    "vmax": 30,
-   "lut": "freeboard"
+   "lut": "freeboard",
+   "units": "m/s"
   },
   {
    "id": "amsr3_l2_ASW",
@@ -266,7 +284,8 @@
    "enc": "linear",
    "vmin": 0,
    "vmax": 60,
-   "lut": "freeboard"
+   "lut": "freeboard",
+   "units": "m/s"
   },
   {
    "id": "amsr3_l3_SIC",
@@ -279,7 +298,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "amsr3_l3_HSI",
@@ -292,7 +312,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "amsr3_l3_SST",
@@ -305,7 +326,8 @@
    "enc": "linear",
    "vmin": -2,
    "vmax": 35,
-   "lut": "thermal"
+   "lut": "thermal",
+   "units": "°C"
   },
   {
    "id": "amsr3_l3_SSW",
@@ -318,7 +340,8 @@
    "enc": "linear",
    "vmin": 0,
    "vmax": 30,
-   "lut": "freeboard"
+   "lut": "freeboard",
+   "units": "m/s"
   },
   {
    "id": "amsr3_l3_ASW",
@@ -331,7 +354,8 @@
    "enc": "linear",
    "vmin": 0,
    "vmax": 60,
-   "lut": "freeboard"
+   "lut": "freeboard",
+   "units": "m/s"
   },
   {
    "id": "amsr3_l3_SIM",
@@ -344,7 +368,8 @@
    "enc": "linear",
    "vmin": -40,
    "vmax": 40,
-   "lut": "thermal"
+   "lut": "thermal",
+   "units": "cm/s"
   },
   {
    "id": "asip_l3",
@@ -358,7 +383,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "asip_l4",
@@ -372,7 +398,8 @@
    "enc": "percent",
    "vmin": 0,
    "vmax": 100,
-   "lut": "ice"
+   "lut": "ice",
+   "units": "%"
   },
   {
    "id": "viirs_29",
@@ -431,7 +458,8 @@
    "enc": "linear",
    "vmin": 210,
    "vmax": 313,
-   "lut": "thermal"
+   "lut": "thermal",
+   "units": "K"
   },
   {
    "id": "viirs_30p",
@@ -444,7 +472,8 @@
    "enc": "linear",
    "vmin": 210,
    "vmax": 313,
-   "lut": "thermal"
+   "lut": "thermal",
+   "units": "K"
   },
   {
    "id": "icesat2_atl20",
