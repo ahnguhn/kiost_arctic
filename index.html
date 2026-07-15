@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Arctic Polar Viewer — 해빙자료 (EPSG:3413)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="lib/maplibre-gl.js"></script>
+<link href="lib/maplibre-gl.css" rel="stylesheet">
+<script src="lib/geotiff.js"></script>
+<script src="data/land_data.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; font-family: 'Malgun Gothic', 'Segoe UI', sans-serif;
+               font-size: 13px; color: #222; }
+  #app { display: grid; grid-template-columns: 300px 1fr 340px; height: 100vh; }
+  .pane { display: flex; flex-direction: column; min-height: 0; background: #fafbfc;
+          border-right: 1px solid #d7dde3; }
+  .pane h2 { margin: 0; padding: 9px 12px; font-size: 13.5px; background: #eef2f6;
+             border-bottom: 1px solid #d7dde3; color: #0f4c81; }
+  /* ---------- 왼쪽: 데이터 리스트 ---------- */
+  #list-top { flex: 1.35; overflow-y: auto; min-height: 0; }
+  #list-top .grp { padding: 6px 10px 3px; font-size: 11px; font-weight: 700;
+                   color: #667; background: #f2f5f8; position: sticky; top: 0; }
+  .item { display: flex; align-items: center; padding: 5px 8px 5px 12px;
+          cursor: pointer; border-bottom: 1px solid #eef1f4; }
+  .item:hover { background: #eaf2fb; }
+  .item.sel { background: #dcebfb; }
+  .item .nm { flex: 1; }
+  .item button { border: 1px solid #9db6cc; background: #fff; color: #0f4c81;
+                 border-radius: 4px; cursor: pointer; font-size: 12px;
+                 width: 22px; height: 22px; line-height: 1; }
+  .item button:hover { background: #0f4c81; color: #fff; }
+  /* ---------- 왼쪽 하단: 그리기 목록 ---------- */
+  #queue-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0;
+                border-top: 2px solid #c6ccd4; }
+  #queue { flex: 1; overflow-y: auto; min-height: 0; padding: 4px 0; }
+  .qitem { display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+           margin: 3px 8px; background: #fff; border: 1px solid #cfd8e0;
+           border-radius: 5px; cursor: grab; }
+  .qitem.dragging { opacity: 0.4; }
+  .qitem .handle { color: #99a; cursor: grab; }
+  .qitem .no { color: #0f4c81; font-weight: 700; width: 16px; text-align: right; }
+  .qitem .nm { flex: 1; }
+  .qitem .del { border: none; background: none; color: #b55; cursor: pointer;
+                font-size: 14px; }
+  .qitem .eye { border: none; background: none; cursor: pointer; font-size: 13px;
+                padding: 0 2px; }
+  .qitem.off { opacity: 0.55; }
+  .qitem.off .nm { text-decoration: line-through; color: #889; }
+  #queue-btns { display: flex; gap: 8px; padding: 9px 10px;
+                border-top: 1px solid #d7dde3; background: #f2f5f8; }
+  #queue-btns button { flex: 1; padding: 8px 0; border-radius: 6px; cursor: pointer;
+                       font-size: 13.5px; font-weight: 700; border: 1px solid #0f4c81; }
+  #btn-draw { background: #0f4c81; color: #fff; }
+  #btn-draw:hover { background: #0b3a63; }
+  #btn-clear { background: #fff; color: #0f4c81; }
+  #btn-clear:hover { background: #fbe9e9; color: #a33; border-color: #a33; }
+  #empty-q { color: #99a; text-align: center; padding: 16px 8px; font-size: 12px; }
+  /* ---------- 가운데: 지도 ---------- */
+  #map-wrap { position: relative; min-width: 0; }
+  #map { position: absolute; inset: 0; background: #0b2440; }
+  #coords { position: absolute; right: 10px; bottom: 10px; z-index: 5;
+            background: rgba(255,255,255,.92); border-radius: 6px; padding: 5px 10px;
+            font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  #status { position: absolute; left: 10px; bottom: 10px; z-index: 5;
+            background: rgba(255,255,255,.92); border-radius: 6px; padding: 5px 10px;
+            font-size: 11.5px; color: #345; display: none; }
+  .lbl { font-size: 11px; font-weight: 600; white-space: nowrap; pointer-events: none;
+         text-shadow: 0 0 3px #fff, 0 0 3px #fff; color: #333; }
+  .lbl.grat { color: #c3d2e0; text-shadow: 0 0 3px #0b2440, 0 0 3px #0b2440;
+              font-weight: 500; }
+  .lbl.region { font-size: 12px; font-weight: 800;
+                text-shadow: 0 0 3px #0b2440, 0 0 4px #0b2440, 0 0 5px #0b2440; }
+  /* ---------- 오른쪽: 설명 ---------- */
+  #desc { overflow-y: auto; border-right: none; border-left: 1px solid #d7dde3; }
+  #desc-body { padding: 12px 14px; }
+  #desc-body h3 { margin: 0 0 10px; font-size: 15px; color: #123; }
+  #desc-body table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  #desc-body td { padding: 4px 6px; border-bottom: 1px solid #eef1f4;
+                  vertical-align: top; font-size: 12.3px; }
+  #desc-body td.k { color: #0f4c81; font-weight: 700; width: 78px; white-space: nowrap; }
+  #desc-body img { width: 100%; border: 1px solid #d7dde3; border-radius: 4px; }
+  #desc-body .cap { font-size: 11px; color: #778; margin-top: 4px; }
+  #desc-body .note { font-size: 11.5px; color: #866; background: #fdf6ec;
+                     border: 1px solid #f0e3cc; border-radius: 5px;
+                     padding: 6px 8px; margin: 8px 0; }
+  #desc-empty { color: #99a; padding: 24px 14px; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 왼쪽 -->
+  <div class="pane">
+    <h2>데이터 리스트</h2>
+    <div id="list-top"></div>
+    <div id="queue-wrap">
+      <h2>그리기 목록 <span style="font-weight:400;color:#889">(드래그로 순서 변경)</span></h2>
+      <div id="queue"><div id="empty-q">상단 목록에서 [＋] 로 추가하세요</div></div>
+      <div id="queue-btns">
+        <button id="btn-draw">그리기</button>
+        <button id="btn-clear">모두 지우기</button>
+      </div>
+    </div>
+  </div>
+  <!-- 가운데 -->
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="coords">위도 —, 경도 —</div>
+    <div id="status"></div>
+  </div>
+  <!-- 오른쪽 -->
+  <div class="pane" id="desc">
+    <h2>데이터 설명</h2>
+    <div id="desc-body"><div id="desc-empty">왼쪽 목록에서 데이터를 선택하세요</div></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================================================================
+ * EPSG:3413 극사영 <-> 가상 좌표 (MapLibre 는 웹메르카토르 전용)
+ * 데이터(COG)·좌표계 기준: EPSG:3413. 가상좌표 매핑은 기존 데모와 동일.
+ * ================================================================ */
+const A = 6378137.0, F = 1 / 298.257223563;
+const E2 = F * (2 - F), ECC = Math.sqrt(E2);
+const LAT_TS = 70 * Math.PI / 180, LON0 = -45 * Math.PI / 180;
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+function tsfn(phi) {
+  const s = ECC * Math.sin(phi);
+  return Math.tan(Math.PI / 4 - phi / 2) / Math.pow((1 - s) / (1 + s), ECC / 2);
+}
+const MC = Math.cos(LAT_TS) / Math.sqrt(1 - E2 * Math.sin(LAT_TS) ** 2);
+const TC = tsfn(LAT_TS);
+function forward(lonDeg, latDeg) {
+  const lam = lonDeg * D2R, phi = latDeg * D2R;
+  const rho = A * MC * tsfn(phi) / TC;
+  return [rho * Math.sin(lam - LON0), -rho * Math.cos(lam - LON0)];
+}
+function inverse(x, y) {
+  const rho = Math.hypot(x, y);
+  const t = rho * TC / (A * MC);
+  let phi = Math.PI / 2 - 2 * Math.atan(t);
+  for (let i = 0; i < 8; i++) {
+    const s = ECC * Math.sin(phi);
+    phi = Math.PI / 2 - 2 * Math.atan(t * Math.pow((1 - s) / (1 + s), ECC / 2));
+  }
+  return [(((LON0 + Math.atan2(x, -y)) * R2D + 540) % 360) - 180, phi * R2D];
+}
+const EXT = 9000000;
+function fakeOfMeters(x, y) {
+  return [Math.max(-179.99, Math.min(179.99, x / EXT * 180)),
+          Math.max(-85, Math.min(85, Math.atan(Math.sinh(Math.PI * y / EXT)) * R2D))];
+}
+function toFake(lon, lat) { const [x, y] = forward(lon, lat); return fakeOfMeters(x, y); }
+function metersFromFake(fl, fy) {
+  return [fl / 180 * EXT, Math.asinh(Math.tan(fy * D2R)) / Math.PI * EXT];
+}
+
+/* ---------------- 지도 기본 (육지 + 위경도망) ---------------- */
+function ringToFake(r) { return r.map(([lo, la]) => toFake(lo, la)); }
+const landFake = { type: 'FeatureCollection', features: LAND_GEOJSON.features.map(f => ({
+  type: 'Feature', properties: {},
+  geometry: { type: 'Polygon', coordinates: f.geometry.coordinates.map(ringToFake) } })) };
+const gratFeatures = [];
+for (let lat = 30; lat <= 80; lat += 10) {
+  const c = []; for (let lon = -180; lon <= 180; lon += 1) c.push(toFake(lon, lat));
+  gratFeatures.push({ type: 'Feature', properties: {},
+    geometry: { type: 'LineString', coordinates: c } });
+}
+for (let lon = -180; lon < 180; lon += 30) {
+  const c = []; for (let lat = 88.5; lat >= 30; lat -= 0.5) c.push(toFake(lon, lat));
+  gratFeatures.push({ type: 'Feature', properties: {},
+    geometry: { type: 'LineString', coordinates: c } });
+}
+
+/* 파이프라인 다운로드 권역 (utils region_select DEFAULT_REGIONS 와 동일) */
+const REGIONS = [
+  { name: 'ARC', label: '북극해', lon_min: -180, lon_max: 180, lat_min: 67, lat_max: 90, color: '#ff5d5d' },
+  { name: 'BRS', label: '베링해', lon_min: 117, lon_max: 198, lat_min: 40, lat_max: 67, color: '#ffb84d' },
+  { name: 'ENS', label: '북유럽해', lon_min: -10, lon_max: 25, lat_min: 49, lat_max: 67, color: '#5ee08a' },
+  { name: 'YLS', label: '황해', lon_min: 117.5, lon_max: 127, lat_min: 35, lat_max: 41, color: '#c77dff' },
+  { name: 'EAS', label: '동해', lon_min: 127, lon_max: 143, lat_min: 32, lat_max: 50, color: '#4dd7ff' },
+];
+
+const map = new maplibregl.Map({
+  container: 'map', attributionControl: false, renderWorldCopies: false,
+  center: [0, 12], zoom: 1.8, minZoom: 0, maxZoom: 10,
+  style: { version: 8, sources: {}, layers: [
+    { id: 'bg', type: 'background', paint: { 'background-color': '#0b2440' } }] },
+});
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right');
+
+function addLabel(pos, text, cls) {
+  const el = document.createElement('div');
+  el.className = 'lbl ' + (cls || '');
+  el.textContent = text;
+  new maplibregl.Marker({ element: el }).setLngLat(pos).addTo(map);
+}
+
+map.on('load', () => {
+  map.addSource('land', { type: 'geojson', data: landFake });
+  map.addSource('grat', { type: 'geojson', data: { type: 'FeatureCollection', features: gratFeatures } });
+  map.addLayer({ id: 'land-fill', type: 'fill', source: 'land',
+    paint: { 'fill-color': '#d9d9d9' } });
+  map.addLayer({ id: 'land-line', type: 'line', source: 'land',
+    paint: { 'line-color': '#8c8c8c', 'line-width': 0.7 } });
+  map.addLayer({ id: 'grat', type: 'line', source: 'grat',
+    paint: { 'line-color': '#7f96ad', 'line-width': 0.8, 'line-opacity': 0.7,
+             'line-dasharray': [3, 3] } });
+  for (let lat = 30; lat <= 80; lat += 10) addLabel(toFake(179, lat), lat + '°N', 'grat');
+  const COUNTRIES = [['러시아', 95, 65], ['캐나다', -110, 62], ['알래스카', -158, 68],
+    ['그린란드', -41, 72.5], ['아이슬란드', -17.5, 65.6], ['노르웨이', 9, 61.5],
+    ['중국', 104, 35.5], ['대한민국', 128.2, 36.3], ['일본', 138.5, 36.5], ['미국', -100, 39.5]];
+  for (const [n, lo, la] of COUNTRIES) addLabel(toFake(lo, la), n, '');
+
+  /* --- 세부 지역 권역 (파이프라인 5개 해역, region_select 와 동일) --- */
+  const regionFeatures = REGIONS.map(rg => {
+    const ring = [];
+    const { lon_min: w0, lon_max: e0, lat_min: s0, lat_max: n0 } = rg;
+    if (e0 - w0 >= 360) {                    // 전 경도 권역(ARC): 위도원만
+      for (let lo = -180; lo <= 180; lo += 0.5) ring.push(toFake(lo, s0));
+    } else {
+      for (let lo = w0; lo < e0; lo += 0.5) ring.push(toFake(lo, n0));   // 북변
+      ring.push(toFake(e0, n0));
+      for (let la = n0; la > s0; la -= 0.25) ring.push(toFake(e0, la));  // 동변
+      ring.push(toFake(e0, s0));
+      for (let lo = e0; lo > w0; lo -= 0.5) ring.push(toFake(lo, s0));   // 남변
+      ring.push(toFake(w0, s0));
+      for (let la = s0; la < n0; la += 0.25) ring.push(toFake(w0, la));  // 서변
+      ring.push(ring[0]);
+    }
+    return { type: 'Feature', properties: { name: rg.name, color: rg.color },
+             geometry: { type: 'LineString', coordinates: ring } };
+  });
+  map.addSource('regions', { type: 'geojson',
+    data: { type: 'FeatureCollection', features: regionFeatures } });
+  map.addLayer({ id: 'regions-line', type: 'line', source: 'regions',
+    paint: { 'line-color': ['get', 'color'], 'line-width': 1.8, 'line-opacity': 0.9 } });
+  for (const rg of REGIONS) {
+    const el = document.createElement('div');
+    el.className = 'lbl region'; el.textContent = rg.name;
+    el.style.color = rg.color;
+    new maplibregl.Marker({ element: el })
+      .setLngLat(toFake((rg.lon_min + rg.lon_max) / 2, rg.lat_max)).addTo(map);
+  }
+});
+
+const coordsBox = document.getElementById('coords');
+map.on('mousemove', (e) => {
+  const [x, y] = metersFromFake(e.lngLat.lng, e.lngLat.lat);
+  const [lon, lat] = inverse(x, y);
+  if (!isFinite(lat) || lat < 10) { coordsBox.textContent = '위도 —, 경도 —'; return; }
+  coordsBox.textContent =
+    `위도 ${lat.toFixed(2)}°, 경도 ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}` +
+    ` · x ${(x / 1000).toFixed(0)} km, y ${(y / 1000).toFixed(0)} km`;
+});
+
+/* ================================================================
+ * 카탈로그/설명 로딩 (데이터 경로는 data/catalog.json 에서 관리)
+ * ================================================================ */
+let CATALOG = [], DESCS = {}, selectedId = null;
+const queue = [];               // 그리기 목록 (id 순서 = 그리기 순서)
+const drawnLayers = [];         // 지도에 올라간 레이어 id
+const hiddenIds = new Set();    // 보이지 않기 상태인 데이터 id
+
+async function boot() {
+  const [cat, des] = await Promise.all([
+    fetch('data/catalog.json').then(r => r.json()),
+    fetch('data/descriptions.json').then(r => r.json()),
+  ]);
+  CATALOG = cat.entries; DESCS = des;
+  renderList();
+}
+boot().catch(e => {
+  document.getElementById('list-top').innerHTML =
+    '<div style="padding:12px;color:#a33">카탈로그 로딩 실패: ' + e +
+    '<br><br>이 페이지는 로컬 웹서버로 열어야 합니다.<br>' +
+    'web 폴더의 <b>run_web.bat</b> 을 실행하세요.</div>';
+});
+
+/* ---------------- 왼쪽 상단 목록 ---------------- */
+function renderList() {
+  const box = document.getElementById('list-top');
+  box.innerHTML = '';
+  let grp = null;
+  for (const e of CATALOG) {
+    if (e.group !== grp) {
+      grp = e.group;
+      const g = document.createElement('div');
+      g.className = 'grp'; g.textContent = grp;
+      box.appendChild(g);
+    }
+    const it = document.createElement('div');
+    it.className = 'item'; it.dataset.id = e.id;
+    it.innerHTML = `<span class="nm">${e.name}</span>`;
+    const btn = document.createElement('button');
+    btn.textContent = '＋'; btn.title = '그리기 목록에 추가';
+    btn.onclick = (ev) => { ev.stopPropagation(); addToQueue(e.id); };
+    it.appendChild(btn);
+    it.onclick = () => selectItem(e.id);
+    it.ondblclick = () => addToQueue(e.id);
+    box.appendChild(it);
+  }
+}
+
+function selectItem(id) {
+  selectedId = id;
+  document.querySelectorAll('#list-top .item').forEach(el =>
+    el.classList.toggle('sel', el.dataset.id === id));
+  showDesc(id);
+}
+
+/* ---------------- 오른쪽 설명 ---------------- */
+function showDesc(id) {
+  const e = CATALOG.find(x => x.id === id);
+  const d = DESCS[e.desc] || DESCS[id];
+  const body = document.getElementById('desc-body');
+  if (!d) { body.innerHTML = '<div id="desc-empty">설명 없음</div>'; return; }
+  let html = `<h3>${d.title}</h3><table>`;
+  for (const [k, v] of d.fields) html += `<tr><td class="k">${k}</td><td>${v}</td></tr>`;
+  html += '</table>';
+  if (d.note) html += `<div class="note">※ ${d.note}</div>`;
+  html += `<a href="${e.png}" target="_blank"><img src="${e.png}" alt="${d.title}"></a>` +
+          `<div class="cap">${d.caption || ''}</div>`;
+  body.innerHTML = html;
+}
+
+/* ---------------- 왼쪽 하단: 그리기 목록 (중복 방지 + DnD) ---------------- */
+function addToQueue(id) {
+  if (queue.includes(id)) return;           // 중복 추가 방지
+  queue.push(id);
+  renderQueue();
+}
+function removeFromQueue(id) {
+  const i = queue.indexOf(id);
+  if (i >= 0) queue.splice(i, 1);
+  hiddenIds.delete(id);
+  const lid = 'cog-' + id;                  // 이미 그려져 있으면 지도에서도 제거
+  if (map.getLayer(lid)) map.removeLayer(lid);
+  if (map.getSource(lid)) map.removeSource(lid);
+  const di = drawnLayers.indexOf(lid);
+  if (di >= 0) drawnLayers.splice(di, 1);
+  renderQueue();
+}
+
+/* 레이어별 보이기 / 보이지 않기 토글 */
+function toggleVisibility(id) {
+  if (hiddenIds.has(id)) hiddenIds.delete(id); else hiddenIds.add(id);
+  const lid = 'cog-' + id;
+  if (map.getLayer(lid))
+    map.setLayoutProperty(lid, 'visibility', hiddenIds.has(id) ? 'none' : 'visible');
+  renderQueue();
+}
+function renderQueue() {
+  const box = document.getElementById('queue');
+  box.innerHTML = '';
+  if (!queue.length) {
+    box.innerHTML = '<div id="empty-q">상단 목록에서 [＋] 로 추가하세요</div>';
+    return;
+  }
+  queue.forEach((id, idx) => {
+    const e = CATALOG.find(x => x.id === id);
+    const it = document.createElement('div');
+    it.className = 'qitem'; it.draggable = true; it.dataset.id = id;
+    if (hiddenIds.has(id)) it.classList.add('off');
+    it.innerHTML = `<span class="handle">⋮⋮</span><span class="no">${idx + 1}</span>` +
+                   `<span class="nm">${e ? e.name : id}</span>`;
+    const eye = document.createElement('button');
+    eye.className = 'eye'; eye.textContent = hiddenIds.has(id) ? '🚫' : '👁';
+    eye.title = hiddenIds.has(id) ? '보이기' : '보이지 않기';
+    eye.onclick = (ev) => { ev.stopPropagation(); toggleVisibility(id); };
+    it.appendChild(eye);
+    const del = document.createElement('button');
+    del.className = 'del'; del.textContent = '×'; del.title = '제거';
+    del.onclick = () => removeFromQueue(id);
+    it.appendChild(del);
+    it.addEventListener('dragstart', (ev) => {
+      ev.dataTransfer.setData('text/plain', id);
+      it.classList.add('dragging');
+    });
+    it.addEventListener('dragend', () => it.classList.remove('dragging'));
+    it.addEventListener('dragover', (ev) => ev.preventDefault());
+    it.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      const from = ev.dataTransfer.getData('text/plain');
+      if (!from || from === id) return;
+      const fi = queue.indexOf(from), ti = queue.indexOf(id);
+      queue.splice(fi, 1);
+      queue.splice(ti, 0, from);
+      renderQueue();
+    });
+    box.appendChild(it);
+  });
+}
+
+/* ================================================================
+ * COG 그리기 — EPSG:3413 COG 를 읽어 가상좌표 캔버스로 리샘플 후
+ * MapLibre image 소스로 추가 (그리기 목록 순서대로 위에 쌓임)
+ * ================================================================ */
+const LUTS = {
+  freeboard: [[8,29,88],[34,94,168],[65,182,196],[199,233,180],[254,204,92],[227,26,28]],
+  thermal: [[20,20,120],[60,120,216],[240,240,240],[245,150,60],[170,10,10]],
+  ice: [[10,30,80],[40,110,180],[150,205,235],[255,255,255]],
+  gray: [[0,0,0],[255,255,255]],
+};
+// 분류 제품(TSI 등) 클래스 색 — 파이프라인 make_color_table 과 동일 (byte = 값+1)
+const CLASS_COLORS = [
+  [95,110,130],[230,40,40],[255,140,0],[255,210,40],[120,200,80],[0,180,190],
+  [60,100,230],[150,70,200],[240,110,180],[140,90,50],[255,255,255]];
+function lutColor(name, t) {
+  const a = LUTS[name] || LUTS.gray;
+  if (!isFinite(t)) t = 0;
+  const p = Math.max(0, Math.min(1, t)) * (a.length - 1);
+  const i = Math.min(a.length - 2, Math.floor(p)), f = p - i;
+  return [0, 1, 2].map(c => Math.round(a[i][c] * (1 - f) + a[i + 1][c] * f));
+}
+
+/* 파이프라인 인코딩(enc: percent|linear|classes) 기반 256색 테이블 생성.
+ * COG 에 컬러테이블이 내장돼 있지 않아도 항상 제품 색상이 적용된다.
+ * (percent: byte 1..100 = 0..100 %, linear: byte 1..255 = vmin..vmax,
+ *  classes: byte = 클래스값+1. byte 0 = nodata 투명) */
+const entryTableCache = {};
+function buildEntryTable(entry) {
+  const key = entry.id;
+  if (entryTableCache[key]) return entryTableCache[key];
+  const rgb = new Uint8Array(256 * 3);
+  const alpha = new Uint8Array(256);            // 0 = 투명
+  const put = (i, c, a = 255) => { rgb[i*3] = c[0]; rgb[i*3+1] = c[1]; rgb[i*3+2] = c[2]; alpha[i] = a; };
+  if (entry.enc === 'values') {                  // 값별 지정 색 (VNP29 이진 등)
+    for (const [k, c] of Object.entries(entry.colors || {})) put(+k, c);
+  } else if (entry.enc === 'classes') {
+    for (let i = 0; i < CLASS_COLORS.length; i++) put(i + 1, CLASS_COLORS[i]);
+    for (let i = CLASS_COLORS.length + 1; i < 256; i++) put(i, [200, 200, 200]);
+  } else if (entry.enc === 'percent') {
+    for (let i = 1; i <= 100; i++) put(i, lutColor(entry.lut || 'ice', i / 100));
+    // 101..255 = 플래그/미관측 → 투명
+  } else {                                       // linear (기본)
+    for (let i = 1; i < 256; i++) put(i, lutColor(entry.lut || 'gray', i / 255));
+  }
+  return (entryTableCache[key] = { rgb, alpha });
+}
+
+function setStatus(msg) {
+  const el = document.getElementById('status');
+  if (!msg) { el.style.display = 'none'; return; }
+  el.textContent = msg; el.style.display = 'block';
+}
+
+async function openTiff(url) {
+  try {
+    return await GeoTIFF.fromUrl(url);
+  } catch (e) {
+    // Range 요청을 지원하지 않는 서버(단순 http.server 등) → 전체 파일 폴백
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`COG 요청 실패 (${r.status}) — ${url}`);
+    return await GeoTIFF.fromArrayBuffer(await r.arrayBuffer());
+  }
+}
+
+async function renderCog(entry) {
+  const tiff = await openTiff(entry.cog);
+  const count = await tiff.getImageCount();
+  // 목표 크기 이하의 가장 큰 오버뷰 선택
+  const target = entry.maxPx || 1100;
+  let img = await tiff.getImage(0);
+  for (let i = 0; i < count; i++) {
+    const im = await tiff.getImage(i);
+    img = im;
+    if (Math.max(im.getWidth(), im.getHeight()) <= target) break;
+  }
+  const img0 = await tiff.getImage(0);
+  const bbox = img0.getBoundingBox();   // 3413 m
+  const w = img.getWidth(), h = img.getHeight();
+  const data = (await img.readRasters({ samples: [0], interleave: true }));
+  const fd = img.getFileDirectory();
+  let nod = null;
+  if (typeof img.getGDALNoData === 'function') nod = img.getGDALNoData();
+  if (nod === null && fd.GDAL_NODATA !== undefined) nod = parseFloat(fd.GDAL_NODATA);
+  // 컬러테이블: 오버뷰 IFD → 원본 IFD 순으로 탐색 (오버뷰에는 없는 경우가 있음)
+  let cmap = fd.ColorMap || img0.getFileDirectory().ColorMap || null;
+  // 인코딩 기반 색상 테이블 — override 항목(VNP29 등)은 내장 팔레트보다 우선
+  const etab = (entry.kind === 'palette' && (entry.override || !cmap))
+    ? buildEntryTable(entry) : null;
+  if (etab) cmap = null;
+  const nColors = cmap ? cmap.length / 3 : 0;
+
+  // float 스트레치 범위
+  let lo = entry.kind === 'float' ? entry.vmin : undefined;
+  let hi = entry.kind === 'float' ? entry.vmax : undefined;
+  if (entry.kind === 'float' && (lo === undefined || hi === undefined)) {
+    const vals = [];
+    for (let i = 0; i < data.length; i += Math.max(1, Math.floor(data.length / 60000))) {
+      const v = data[i];
+      if (isFinite(v) && (nod === null || v !== nod)) vals.push(v);
+    }
+    vals.sort((a, b) => a - b);
+    const st = entry.stretch || [2, 98];
+    lo = vals[Math.floor(vals.length * st[0] / 100)] ?? 0;
+    hi = vals[Math.floor(vals.length * st[1] / 100)] ?? 1;
+    if (hi <= lo) hi = lo + 1e-6;
+  }
+
+  // 원본 3413 bbox -> 가상좌표 캔버스 리샘플 (y 비선형 정확 처리)
+  const [x0, y0m, x1, y1m] = bbox;
+  const [flon0] = fakeOfMeters(x0, 0), [flon1] = fakeOfMeters(x1, 0);
+  const flat0 = fakeOfMeters(0, y0m)[1], flat1 = fakeOfMeters(0, y1m)[1];
+  const outW = Math.min(1400, Math.max(300, w));
+  const outH = Math.min(1400, Math.max(300, h));
+  const cv = document.createElement('canvas');
+  cv.width = outW; cv.height = outH;
+  const ctx = cv.getContext('2d');
+  const imd = ctx.createImageData(outW, outH);
+  const px = imd.data;
+  const gx = (x1 - x0) / w, gy = (y1m - y0m) / h;   // 원본 셀 크기
+  for (let r = 0; r < outH; r++) {
+    // 캔버스 행 -> 가상 lat -> 3413 y
+    const flat = flat1 + (flat0 - flat1) * (r + 0.5) / outH;   // 위(=flat1, 북) -> 아래
+    const ym = Math.asinh(Math.tan(flat * D2R)) / Math.PI * EXT;
+    const sr = Math.floor((y1m - ym) / (y1m - y0m) * h);
+    if (sr < 0 || sr >= h) continue;
+    for (let c = 0; c < outW; c++) {
+      const xm = x0 + (x1 - x0) * (c + 0.5) / outW;
+      const sc = Math.floor((xm - x0) / (x1 - x0) * w);
+      const v = data[sr * w + sc];
+      const o = (r * outW + c) * 4;
+      if (v === undefined || !isFinite(v) || (nod !== null && v === nod)) continue;
+      if (cmap) {
+        if (v === 0) continue;                     // byte 팔레트: 0 = nodata
+        const idx = Math.min(nColors - 1, Math.round(v));
+        px[o] = cmap[idx] >> 8; px[o + 1] = cmap[nColors + idx] >> 8;
+        px[o + 2] = cmap[2 * nColors + idx] >> 8; px[o + 3] = 255;
+      } else if (etab) {                           // 파이프라인 인코딩 색상
+        const idx = Math.max(0, Math.min(255, Math.round(v)));
+        if (!etab.alpha[idx]) continue;            // 0 = nodata, percent 101+ = 플래그
+        px[o] = etab.rgb[idx * 3]; px[o + 1] = etab.rgb[idx * 3 + 1];
+        px[o + 2] = etab.rgb[idx * 3 + 2]; px[o + 3] = etab.alpha[idx];
+      } else {
+        const t = (lo === undefined) ? v / 255 : (v - lo) / (hi - lo);
+        const [rr, gg, bb] = lutColor(entry.lut || 'gray', t);
+        px[o] = rr; px[o + 1] = gg; px[o + 2] = bb; px[o + 3] = 255;
+      }
+    }
+  }
+  ctx.putImageData(imd, 0, 0);
+  return {
+    url: cv.toDataURL('image/png'),
+    coords: [[flon0, flat1], [flon1, flat1], [flon1, flat0], [flon0, flat0]],
+    fakeBounds: [[flon0, flat0], [flon1, flat1]],
+  };
+}
+
+function clearDrawn() {
+  for (const id of drawnLayers) {
+    if (map.getLayer(id)) map.removeLayer(id);
+    if (map.getSource(id)) map.removeSource(id);
+  }
+  drawnLayers.length = 0;
+}
+
+document.getElementById('btn-draw').onclick = async () => {
+  if (!queue.length) { setStatus('그리기 목록이 비어 있습니다'); setTimeout(() => setStatus(''), 1500); return; }
+  clearDrawn();
+  let union = null;
+  for (let i = 0; i < queue.length; i++) {
+    const entry = CATALOG.find(x => x.id === queue[i]);
+    setStatus(`그리는 중 (${i + 1}/${queue.length}) — ${entry.name}`);
+    try {
+      const res = await renderCog(entry);
+      const lid = 'cog-' + entry.id;
+      map.addSource(lid, { type: 'image', url: res.url, coordinates: res.coords });
+      map.addLayer({ id: lid, type: 'raster', source: lid,
+                     layout: { visibility: hiddenIds.has(entry.id) ? 'none' : 'visible' },
+                     paint: { 'raster-opacity': 1.0, 'raster-resampling': 'nearest' } },
+                   map.getLayer('regions-line') ? 'regions-line' : undefined);
+      drawnLayers.push(lid);
+      const [[ax, ay], [bx, by]] = res.fakeBounds;
+      union = union
+        ? [[Math.min(union[0][0], ax), Math.min(union[0][1], ay)],
+           [Math.max(union[1][0], bx), Math.max(union[1][1], by)]]
+        : [[ax, ay], [bx, by]];
+    } catch (err) {
+      console.error(entry.id, err);
+      setStatus(`오류: ${entry.name} — ${err.message || err}`);
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+  setStatus('');
+  if (union) map.fitBounds(union, { padding: 40, duration: 400 });
+};
+
+document.getElementById('btn-clear').onclick = () => {
+  clearDrawn();          // 지도에서 제거
+  queue.length = 0;      // 그리기 목록도 비움
+  hiddenIds.clear();
+  renderQueue();
+};
+</script>
+</body>
+</html>
